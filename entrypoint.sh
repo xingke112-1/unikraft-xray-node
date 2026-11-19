@@ -65,4 +65,10 @@ if [ -n "${DOMAIN:-}" ]; then
 else
   echo "[entrypoint] 提示：加环境变量 DOMAIN=<你的域名> 再重启，日志里会直接打印节点链接（可复制导入）"
 fi
+# 可选：Beszel 监控探针（WebSocket 模式，主动连 Hub，不用开端口）。
+# 只有设了 BESZEL_TOKEN 才启动；BESZEL_KEY/BESZEL_TOKEN 由实例环境变量传入，不进镜像。
+if [ -n "${BESZEL_TOKEN:-}" ]; then
+  echo "[entrypoint] starting beszel-agent (WS mode)"
+  HUB_URL="${BESZEL_HUB_URL:-https://beszel.xxlxl.ggff.net}" KEY="${BESZEL_KEY:-}" TOKEN="$BESZEL_TOKEN" DISABLE_SSH=true /usr/local/bin/beszel-agent &
+fi
 exec /usr/local/bin/xray run -c /etc/xray/config.json
