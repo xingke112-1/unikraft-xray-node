@@ -18,7 +18,7 @@ RUN apk add --no-cache curl unzip ca-certificates \
  && install -m 0755 /tmp/xray/xray /usr/local/bin/xray \
  && /usr/local/bin/xray version \
  && curl -fsSL -o /tmp/beszel-agent.tar.gz \
-      "https://github.com/henrygd/beszel/releases/download/v${BESZEL_VERSION}/beszel-agent_${BESZEL_VERSION}_linux_amd64.tar.gz" \
+      "https://github.com/henrygd/beszel/releases/download/v${BESZEL_VERSION}/beszel-agent_linux_amd64.tar.gz" \
  && tar -xzf /tmp/beszel-agent.tar.gz -C /tmp \
  && install -m 0755 /tmp/beszel-agent /usr/local/bin/beszel-agent \
  && /usr/local/bin/beszel-agent --version || /usr/local/bin/beszel-agent -v || true
