@@ -1,0 +1,68 @@
+# 把已有实例换成带 Beszel 探针的镜像并注入探针环境变量，不重建实例、链接不变。
+# 前置 Secrets：UKC_TOKEN（已有）、BESZEL_KEY、BESZEL_TOKEN（Hub 面板里取，见仓库说明）。
+name: Update instance image and Beszel env
+
+on:
+  workflow_dispatch:
+    inputs:
+      metro:
+        description: "机房"
+        required: true
+        default: "sin"
+      instance_uuid:
+        description: "实例 UUID"
+        required: true
+        default: "941cf810-b16c-4b21-ba2c-3c93395c8b13"
+      image:
+        description: "新镜像（带标签）"
+        required: true
+        default: "jiuhaojiu/unikraft-xray-node:beszel"
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      UKC_TOKEN: ${{ secrets.UKC_TOKEN }}
+      BESZEL_KEY: ${{ secrets.BESZEL_KEY }}
+      BESZEL_TOKEN: ${{ secrets.BESZEL_TOKEN }}
+    steps:
+      - name: Check secrets
+        run: |
+          missing=""
+          for v in UKC_TOKEN BESZEL_KEY BESZEL_TOKEN; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::以下秘密还没加，请去仓库 Settings -> Secrets -> Actions 里添加：$missing"
+            exit 1
+          fi
+
+      - name: Update instance via API
+        run: |
+          set -euo pipefail
+          API="https://api.${{ inputs.metro }}.unikraft.cloud/v1/instances/${{ inputs.instance_uuid }}"
+          AUTH="Authorization: Bearer $UKC_TOKEN"
+          echo "== set image =="
+          curl -fsS -X PATCH "$API" -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"prop\": \"image\", \"op\": \"set\", \"value\": \"${{ inputs.image }}\"}" | head -c 600; echo
+          echo "== add env =="
+          python3 - <<'PYEOF' > /tmp/env.json
+          import json, os
+          print(json.dumps({"prop": "env", "op": "add", "value": {
+              "BESZEL_HUB_URL": "https://beszel.xxlxl.ggff.net",
+              "BESZEL_KEY": os.environ["BESZEL_KEY"],
+              "BESZEL_TOKEN": os.environ["BESZEL_TOKEN"],
+          }}))
+          PYEOF
+          curl -fsS -X PATCH "$API" -H "$AUTH" -H "Content-Type: application/json" --data @/tmp/env.json | head -c 600; echo
+          rm -f /tmp/env.json
+          echo "== stop =="
+          curl -fsS -X PUT "$API/stop" -H "$AUTH" -H "Content-Type: application/json" -d '{"drain_timeout_ms": 5000}' | head -c 400; echo
+          sleep 6
+          echo "== start =="
+          curl -fsS -X PUT "$API/start" -H "$AUTH" -H "Content-Type: application/json" -d '{"timeout_s": 60}' | head -c 600; echo
+          echo "== state =="
+          curl -fsS "$API" -H "$AUTH" | python3 -c "import sys,json; d=json.load(sys.stdin); i=d['data']['instances'][0]; print(i.get('name'), i.get('state'))"
